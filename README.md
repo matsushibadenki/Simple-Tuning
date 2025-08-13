@@ -1,147 +1,135 @@
-# Simple Fine-tuning Gemma Chat System（Simple-Tuning）
+# **Simple Fine-tuning Gemma Chat System (Simple-Tuning)**
 
-## 概要
+## **概要**
 
-このプロジェクトは、Google Gemma-3-4B-ITモデルをベースに、`llama.cpp`での軽量なチャットシステム運用と、LoRA/QLoRAによる微調整を行うための環境です。
+このプロジェクトは、GoogleのGemmaモデルをベースに、llama.cppを利用した軽量なチャットシステムの運用と、LoRA/QLoRAによるファインチューニングを手軽に行うための統合環境です。
 
-特徴:
+### **✨ 特徴**
 
-* **llama.cpp**をベースにした高速チャットAPIサーバ
-* **JSONベースの対話データ**から学習用データを自動生成
-* **LoRA/QLoRA**による軽量ファインチューニング
-* 学習済LoRAを**GGUF形式**に変換し`--lora`オプションで即適用可能
+* **CLIによる簡単操作**: train, start-server, chat-clientなどのコマンドで直感的に操作可能。  
+* **Docker対応**: Dockerfileにより、環境構築の手間を大幅に削減し、再現性の高い実行環境を提供。  
+* **自動データ整形**: JSON形式の対話データから、SFT（Supervised Fine-Tuning）用の学習データを自動で生成。  
+* **効率的なファインチューニング**: LoRA/QLoRA（Unslothを利用）による効率的なモデルの微調整。  
+* **GGUF連携**: 学習済みのLoRAアダプタをGGUF形式に変換し、llama.cppサーバーで直接利用可能。
 
----
+## **🚀 クイックスタート (Docker)**
 
-## ディレクトリ構成
+Dockerがインストールされていれば、以下のコマンドで環境構築からサーバー起動までを実行できます。
 
-```
-Simple-Tuning/
-├─ models/                  # GGUFモデル/トークナイザー
-├─ adapters/                # 学習で出たLoRA(GGUF)
-├─ data/
-│   ├─ raw/                 # 元データ(JSON)
-│   ├─ sft/                 # SFT用に整形後(JSONL)
-│   └─ eval/                # 評価用データ
-├─ scripts/
-│   ├─ make_sft_from_json.py
-│   ├─ split_train_valid.py
-│   └─ to_gguf_lora.sh
-├─ train/
-│   ├─ unsloth_train.py     # 推奨: Transformers/Unsloth学習
-│   └─ llamacpp_finetune.sh # 任意: llama.cpp直接学習
-├─ serve/
-│   ├─ start_server.sh
-│   └─ chat_client.py
-└─ README.md
-```
+1. **Dockerイメージのビルド**  
+   docker build \-t simple-tuning .
 
----
+2. **チャットサーバーの起動**  
+   docker run \-p 8080:8080 \--rm \-it simple-tuning start-server
 
-## セットアップ
+   サーバーは http://127.0.0.1:8080 で待機します。  
+3. チャットクライアントの利用  
+   別のターミナルから、以下のコマンドでクライアントを起動して対話できます。  
+   docker run \--network host \--rm \-it simple-tuning chat-client
 
-### 1. モデル準備
+## **🛠️ ローカル環境でのセットアップ**
 
-Gemma-3-4B-ITのGGUFモデルを`models/`に配置します。
+### **1\. 依存関係のインストール**
 
-```bash
-models/gemma-3-4b-it.Q4_K_M.gguf
-```
+pip install \-r requirements.txt
 
-Hugging Face等から取得し、必要に応じて`convert_hf_to_gguf.py`で変換してください。
+### **2\. モデルの準備**
 
-### 2. llama.cppのビルド
+llama.cppで利用するGGUF形式のモデルをmodels/ディレクトリに配置してください。
 
-```bash
-git clone https://github.com/ggerganov/llama.cpp.git
-cd llama.cpp
-make -j
-```
+例: models/gemma-3-4b-it.Q4\_K\_M.gguf
 
----
+### **3\. llama.cppのビルド (ローカル実行時のみ)**
 
-## データ準備
+llama.cppを別途クローンし、ビルドしておく必要があります。
 
-### 1. JSONからSFTデータ生成
+git clone https://github.com/ggerganov/llama.cpp.git  
+cd llama.cpp  
+make server  
+\# プロジェクトルートに戻る  
+cd .. 
 
-`data/raw/` に以下のようなJSONを配置します:
+*Dockerを使用する場合、この手順は不要です。*
 
-```json
-[
-  {
-    "system": "あなたは有能なアシスタントです。",
-    "dialogue": [
-      {"role":"user", "content":"Aとは何？"},
-      {"role":"assistant", "content":"Aは..."}
-    ]
-  }
-]
-```
+## **📚 プロジェクトの利用方法**
 
-整形実行:
+### **1\. データ準備**
 
-```bash
-python scripts/make_sft_from_json.py
-python scripts/split_train_valid.py
-```
+data/raw/に、以下のような形式のJSONファイルを配置します。
 
----
+\[  
+  {  
+    "system": "あなたは有能なアシスタントです。",  
+    "dialogue": \[  
+      {"role":"user", "content":"Aとは何？"},  
+      {"role":"assistant", "content":"Aは..."}  
+    \]  
+  }  
+\]
 
-## 学習
+その後、以下のスクリプトを実行して、学習用・検証用のデータセットを生成します。
 
-### 推奨ルート: Transformers/Unsloth
+python scripts/make\_sft\_from\_json.py  
+python scripts/split\_train\_valid.py
 
-```bash
-pip install transformers datasets peft trl unsloth
-python train/unsloth_train.py
-```
+### **2\. ファインチューニングの実行**
 
-生成されたLoRAは `adapters/` に保存されます。
+以下のコマンドで、LoRA/QLoRAによるファインチューニングを開始します。
 
-### GGUF変換
+python main.py train
 
-```bash
-bash scripts/to_gguf_lora.sh
-```
+学習が完了すると、LoRAアダプタがadapters/gemma3\_4b\_it\_chat-lora/ディレクトリに保存されます。
 
----
+### **3\. LoRAアダプタのGGUF変換**
 
-## サーバ起動
+学習済みLoRAをllama.cppで利用するために、GGUF形式に変換します。
 
-```bash
-bash serve/start_server.sh
-```
+bash scripts/to\_gguf\_lora.sh
 
-APIエンドポイント: `http://127.0.0.1:8080/v1/chat/completions`
+*注意: to\_gguf\_lora.sh内の変換スクリプトへのパスは、ご自身の環境に合わせて修正してください。*
 
----
+### **4\. チャットサーバーの起動**
 
-## チャットクライアント使用例
+llama.cppベースのAPIサーバーを起動します。
 
-```bash
-python serve/chat_client.py
-```
+python main.py start-server
 
----
+APIエンドポイント: http://127.0.0.1:8080/v1/chat/completions
 
-## llama.cpp直Finetune（任意）
+### **5\. チャットクライアントの利用**
 
-```bash
-bash train/llamacpp_finetune.sh
-```
+サーバーに接続し、対話を行うためのクライアントを起動します。
 
----
+python main.py chat-client
 
-## 注意点
+## **📂 ディレクトリ構成**
 
-* LoRAは**GGUF形式**に変換してから`--lora`で適用
-* JSONデータはGemmaのチャットテンプレに近づけると効果的
-* llama.cppのバージョンによってオプション仕様が異なるためREADME確認必須
+Simple-Tuning/  
+├── adapters/                \# 学習済みLoRAアダプタ  
+├── data/  
+│   ├── raw/                 \# 元の対話データ (JSON)  
+│   └── sft/                 \# SFT用に整形されたデータ (JSONL)  
+├── models/                  \# GGUFモデル  
+├── scripts/                 \# データ整形・変換スクリプト  
+├── src/  
+│   └── simple\_tuning/       \# アプリケーションのソースコード  
+│       ├── chat/            \# チャットクライアント/サーバー関連  
+│       ├── training/        \# ファインチューニング関連  
+│       ├── config.py        \# 設定ファイル  
+│       └── containers.py    \# DIコンテナ  
+├── main.py                  \# CLIエントリポイント  
+├── Dockerfile               \# Docker環境定義  
+├── requirements.txt         \# Python依存関係  
+└── README.md                \# このファイル
 
----
+## **💡 注意点**
 
-## 参考
+* **LoRAの適用**: llama.cppサーバーでLoRAを適用するには、起動オプションに--lora adapters/your-lora.ggufを追加してください。（src/simple\_tuning/chat/server.pyを修正）  
+* **チャットテンプレート**: llama.cppはモデル名からチャットテンプレートを自動検出しますが、必要であれば--chat-template gemmaのように明示的に指定してください。  
+* **llama.cppのバージョン**: llama.cppのバージョンによって、コマンドラインオプションが変更される可能性があります。公式のドキュメントも合わせてご確認ください。
 
-* [llama.cpp公式](https://github.com/ggerganov/llama.cpp)
-* [Unsloth](https://github.com/unslothai/unsloth)
-* [Hugging Face Gemma](https://huggingface.co/google)
+## **🔗 参考リンク**
+
+* [llama.cpp 公式リポジトリ](https://github.com/ggerganov/llama.cpp)  
+* [Unsloth 公式リポジトリ](https://github.com/unslothai/unsloth)  
+* [Hugging Face \- Google Gemma](https://huggingface.co/google)
