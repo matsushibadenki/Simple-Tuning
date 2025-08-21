@@ -15,17 +15,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # 必要なPythonパッケージのインストール
-# まずrequirements.txtをコピーして実行
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# llama.cppをcloneしてビルド
+# ◾️◾️◾️◾️◾️◾️◾️◾️◾️◾️◾️↓修正開始◾️◾️◾️◾️◾️◾️◾️◾️◾️◾️◾️
+# llama.cppのクローン、ビルド、実行可能ファイルの移動を単一のRUN命令にまとめる
 RUN git clone https://github.com/ggerganov/llama.cpp.git && \
     cd llama.cpp && \
     mkdir build && \
     cd build && \
     cmake .. && \
-    cmake --build . --config Release
+    cmake --build . --config Release && \
+    mkdir -p /app/llama.cpp/bin && \
+    mv ./bin/server /app/llama.cpp/bin/server
+# ◾️◾️◾️◾️◾️◾️◾️◾️◾️◾️◾️↑修正終わり◾️◾️◾️◾️◾️◾️◾️◾️◾️◾️◾️
 
 # アプリケーションのソースコードなどをコピー
 COPY src ./src
@@ -38,6 +41,5 @@ COPY data ./data
 EXPOSE 8080
 
 # コンテナ起動時のデフォルトコマンド
-# /usr/local/bin/server へのパスを修正
 ENTRYPOINT ["python", "main.py"]
 CMD ["--help"]
