@@ -1,24 +1,33 @@
 # Dockerfile
 # 配置先: Simple-Tuning/Dockerfile
-# 安定したPyTorch公式イメージをベースにする
+# 最も確実な公式Ubuntuイメージをベースに、必要なものを全てインストールする
 
-FROM pytorch/pytorch:2.3.1-cuda12.1-cudnn8-runtime
+FROM ubuntu:22.04
 
-# システムパッケージの更新とビルドツールのインストール
-# gitとcmakeはllama.cppのビルドに必要
+# noninteractive frontend to avoid prompts
+ENV DEBIAN_FRONTEND=noninteractive
+
+# システムパッケージの更新とPython、ビルドツールのインストール
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.10 \
+    python3-pip \
+    python3-venv \
     git \
     cmake \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
+# python3 -> pythonエイリアスの作成
+RUN ln -s /usr/bin/python3 /usr/bin/python
+
 WORKDIR /app
 
 # 必要なPythonパッケージのインストール
 COPY requirements.txt .
+# numpy<2.0 を指定してインストール
+RUN pip install --no-cache-dir "numpy<2.0"
 RUN pip install --no-cache-dir -r requirements.txt
 
-# ◾️◾️◾️◾️◾️◾️◾️◾️◾️◾️◾️↓修正開始◾️◾️◾️◾️◾️◾️◾️◾️◾️◾️◾️
 # llama.cppのクローン、ビルド、実行可能ファイルの移動を単一のRUN命令にまとめる
 RUN git clone https://github.com/ggerganov/llama.cpp.git && \
     cd llama.cpp && \
@@ -28,7 +37,6 @@ RUN git clone https://github.com/ggerganov/llama.cpp.git && \
     cmake --build . --config Release && \
     mkdir -p /app/llama.cpp/bin && \
     mv ./bin/server /app/llama.cpp/bin/server
-# ◾️◾️◾️◾️◾️◾️◾️◾️◾️◾️◾️↑修正終わり◾️◾️◾️◾️◾️◾️◾️◾️◾️◾️◾️
 
 # アプリケーションのソースコードなどをコピー
 COPY src ./src
