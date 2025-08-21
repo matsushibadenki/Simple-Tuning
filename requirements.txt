@@ -1,8 +1,6 @@
 transformers
 datasets
 peft
-trl
-unsloth
 torch
 dependency-injector
 click

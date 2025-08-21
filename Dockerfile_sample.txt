@@ -1,6 +1,6 @@
 # Dockerfile
 # 配置先: Simple-Tuning/Dockerfile
-# 最も確実な公式Ubuntuイメージをベースに、必要なものを全てインストールする
+# Ubuntuイメージをベースに、llama.cppのビルドに必要な開発ツールを追加
 
 FROM ubuntu:22.04
 
@@ -10,10 +10,12 @@ ENV DEBIAN_FRONTEND=noninteractive
 # システムパッケージの更新とPython、ビルドツールのインストール
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3.10 \
+    python3.10-dev \
     python3-pip \
     python3-venv \
     git \
     cmake \
+    pkg-config \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
@@ -22,9 +24,8 @@ RUN ln -s /usr/bin/python3 /usr/bin/python
 
 WORKDIR /app
 
-# 必要なPythonパッケージのインストール
+# 必要なPythonパッケージのインストール (unslothなし)
 COPY requirements.txt .
-# numpy<2.0 を指定してインストール
 RUN pip install --no-cache-dir "numpy<2.0"
 RUN pip install --no-cache-dir -r requirements.txt
 
