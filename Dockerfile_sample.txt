@@ -1,33 +1,51 @@
 # /app/Dockerfile
 
-# ベースイメージの指定
-FROM python:3.10-slim
+# --------------------------------------------------
+# 1. ビルドステージ (builder)
+# --------------------------------------------------
+FROM python:3.10-slim AS builder
 
-# 環境変数の設定
-ENV APP_HOME /app
-WORKDIR $APP_HOME
-
-# 必要なパッケージのインストール
+# ビルドに必要なパッケージをインストール
 RUN apt-get update && apt-get install -y \
     git \
     build-essential \
     cmake \
+    libopenblas-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Pythonライブラリのインストール
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# llama.cppのインストール
-# llama.cppのクローン、ビルド、実行可能ファイルの移動を単一のRUN命令にまとめる
+# llama.cppをクローンしてビルド
+# Linux環境なのでCPUバックエンドのみ使用
 RUN git clone https://github.com/ggerganov/llama.cpp.git && \
     cd llama.cpp && \
     mkdir build && \
     cd build && \
-    cmake .. -DLLAMA_CURL=OFF && \
-    cmake --build . --config Release && \
-    mkdir -p /app/llama.cpp/bin && \
-    mv ./bin/llama-server /app/llama.cpp/bin/server
+    cmake .. \
+        -DLLAMA_CURL=OFF \
+        -DGGML_OPENMP=ON \
+        -DGGML_NATIVE=ON \
+        -DCMAKE_BUILD_TYPE=Release && \
+    cmake --build . --config Release --parallel $(nproc)
+
+# --------------------------------------------------
+# 2. 最終ステージ (final)
+# --------------------------------------------------
+FROM python:3.10-slim
+
+ENV APP_HOME=/app
+WORKDIR $APP_HOME
+
+# 実行に必要なパッケージのみをインストール
+RUN apt-get update && apt-get install -y \
+    libopenblas0 \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Pythonライブラリをインストール
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# ビルドステージからコンパイル済みの実行ファイルをコピー
+COPY --from=builder /llama.cpp/build/bin/llama-server /app/llama.cpp/bin/server
 
 # アプリケーションのコードをコピー
 COPY . .
