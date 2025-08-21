@@ -7,9 +7,11 @@
 FROM python:3.10-slim-bookworm as builder
 
 # システムパッケージの更新とビルドツールのインストール
+# cmakeを追加
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     git \
+    cmake \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -18,10 +20,13 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# llama.cppをcloneしてビルド
+# llama.cppをcloneしてビルド (makeからcmakeに変更)
 RUN git clone https://github.com/ggerganov/llama.cpp.git && \
     cd llama.cpp && \
-    make server -j
+    mkdir build && \
+    cd build && \
+    cmake .. && \
+    cmake --build . --config Release
 
 # アプリケーションコードのコピー
 COPY . .
@@ -41,7 +46,8 @@ WORKDIR /app
 COPY --from=builder /app/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY --from=builder /app/llama.cpp/server /usr/local/bin/server
+# ビルドされたserver実行可能ファイルのパスを更新
+COPY --from=builder /app/llama.cpp/build/bin/server /usr/local/bin/server
 COPY --from=builder /app/src ./src
 COPY --from=builder /app/main.py .
 COPY --from=builder /app/models ./models
