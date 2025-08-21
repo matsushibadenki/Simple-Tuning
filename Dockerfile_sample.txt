@@ -1,6 +1,6 @@
 # Dockerfile
 # 配置先: Simple-Tuning/Dockerfile
-# Ubuntuイメージをベースに、llama.cppのビルドに必要な開発ツールを追加
+# Ubuntuイメージをベースに、llama.cppのビルドに必要なCURL開発ライブラリを追加
 
 FROM ubuntu:22.04
 
@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     cmake \
     pkg-config \
     build-essential \
+    libcurl4-openssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # python3 -> pythonエイリアスの作成
@@ -34,7 +35,7 @@ RUN git clone https://github.com/ggerganov/llama.cpp.git && \
     cd llama.cpp && \
     mkdir build && \
     cd build && \
-    cmake .. && \
+    cmake .. -DLLAMA_CURL=OFF && \
     cmake --build . --config Release && \
     mkdir -p /app/llama.cpp/bin && \
     mv ./bin/server /app/llama.cpp/bin/server
