@@ -1,26 +1,25 @@
 # Dockerfile
 # 配置先: Simple-Tuning/Dockerfile
+# 安定したPyTorch公式イメージをベースにする
 
-# -----------------------------------------------------------------------------
-# Stage 1: Builder - 依存関係のインストールとllama.cppのビルド
-# -----------------------------------------------------------------------------
-FROM python:3.10-slim-bookworm as builder
+FROM pytorch/pytorch:2.3.1-cuda12.1-cudnn8-runtime
 
 # システムパッケージの更新とビルドツールのインストール
-# cmakeを追加
+# gitとcmakeはllama.cppのビルドに必要
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
     git \
     cmake \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
 # 必要なPythonパッケージのインストール
+# まずrequirements.txtをコピーして実行
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# llama.cppをcloneしてビルド (makeからcmakeに変更)
+# llama.cppをcloneしてビルド
 RUN git clone https://github.com/ggerganov/llama.cpp.git && \
     cd llama.cpp && \
     mkdir build && \
@@ -28,35 +27,17 @@ RUN git clone https://github.com/ggerganov/llama.cpp.git && \
     cmake .. && \
     cmake --build . --config Release
 
-# アプリケーションコードのコピー
-COPY . .
-
-# -----------------------------------------------------------------------------
-# Stage 2: Runtime - 実行環境の構築
-# -----------------------------------------------------------------------------
-FROM python:3.10-slim-bookworm
-
-# システムパッケージの更新と実行に必要なライブラリのインストール
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /app
-
-# Builderステージから必要なファイルのみコピー
-COPY --from=builder /app/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# ビルドされたserver実行可能ファイルのパスを更新
-COPY --from=builder /app/llama.cpp/build/bin/server /usr/local/bin/server
-COPY --from=builder /app/src ./src
-COPY --from=builder /app/main.py .
-COPY --from=builder /app/models ./models
-COPY --from=builder /app/adapters ./adapters
-COPY --from=builder /app/data ./data
+# アプリケーションのソースコードなどをコピー
+COPY src ./src
+COPY main.py .
+COPY models ./models
+COPY adapters ./adapters
+COPY data ./data
 
 # ポートの開放
 EXPOSE 8080
 
 # コンテナ起動時のデフォルトコマンド
+# /usr/local/bin/server へのパスを修正
 ENTRYPOINT ["python", "main.py"]
 CMD ["--help"]
