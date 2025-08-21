@@ -1,35 +1,24 @@
-# Dockerfile
-# 配置先: Simple-Tuning/Dockerfile
-# Ubuntuイメージをベースに、llama.cppのビルドに必要なCURL開発ライブラリを追加
+# /app/Dockerfile
 
-FROM ubuntu:22.04
+# ベースイメージの指定
+FROM python:3.10-slim
 
-# noninteractive frontend to avoid prompts
-ENV DEBIAN_FRONTEND=noninteractive
+# 環境変数の設定
+ENV APP_HOME /app
+WORKDIR $APP_HOME
 
-# システムパッケージの更新とPython、ビルドツールのインストール
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3.10 \
-    python3.10-dev \
-    python3-pip \
-    python3-venv \
+# 必要なパッケージのインストール
+RUN apt-get update && apt-get install -y \
     git \
-    cmake \
-    pkg-config \
     build-essential \
-    libcurl4-openssl-dev \
+    cmake \
     && rm -rf /var/lib/apt/lists/*
 
-# python3 -> pythonエイリアスの作成
-RUN ln -s /usr/bin/python3 /usr/bin/python
-
-WORKDIR /app
-
-# 必要なPythonパッケージのインストール (unslothなし)
+# Pythonライブラリのインストール
 COPY requirements.txt .
-RUN pip install --no-cache-dir "numpy<2.0"
 RUN pip install --no-cache-dir -r requirements.txt
 
+# llama.cppのインストール
 # llama.cppのクローン、ビルド、実行可能ファイルの移動を単一のRUN命令にまとめる
 RUN git clone https://github.com/ggerganov/llama.cpp.git && \
     cd llama.cpp && \
@@ -38,18 +27,10 @@ RUN git clone https://github.com/ggerganov/llama.cpp.git && \
     cmake .. -DLLAMA_CURL=OFF && \
     cmake --build . --config Release && \
     mkdir -p /app/llama.cpp/bin && \
-    mv ./bin/server /app/llama.cpp/bin/server
+    mv ./bin/llama-server /app/llama.cpp/bin/server
 
-# アプリケーションのソースコードなどをコピー
-COPY src ./src
-COPY main.py .
-COPY models ./models
-COPY adapters ./adapters
-COPY data ./data
+# アプリケーションのコードをコピー
+COPY . .
 
-# ポートの開放
-EXPOSE 8080
-
-# コンテナ起動時のデフォルトコマンド
-ENTRYPOINT ["python", "main.py"]
-CMD ["--help"]
+# FastAPIサーバーの起動コマンド
+CMD ["uvicorn", "src.simple_tuning.chat.server:app", "--host", "0.0.0.0", "--port", "8000"]
